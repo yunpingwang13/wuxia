@@ -28,12 +28,12 @@ class RAGSystem:
             ids=[f"doc_{len(self.collection.get()['ids']) + 1}"]
         )
     
-    def query_knowledge(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+    def query_knowledge(self, query: str) -> List[Dict[str, Any]]:
         """Query the knowledge base for relevant information."""
         query_embedding = self._encode_text(query)
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=n_results
+            n_results=3
         )
         
         return [

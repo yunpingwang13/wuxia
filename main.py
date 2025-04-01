@@ -1,7 +1,9 @@
 from game.engine import GameEngine
 import sys
 import os
+import json
 from dotenv import load_dotenv
+import argparse
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -26,7 +28,35 @@ def print_welcome():
     """)
     input()
 
+def log_state(engine: GameEngine, action: str, result: str, debug: bool):
+    """Log the current game state if in debug mode."""
+    if not debug:
+        return
+    
+    print("\n=== DEBUG: Game State ===")
+    print(f"Action: {action}")
+    print(f"Result: {result}")
+    print(f"Current Location: {engine.current_location}")
+    print("Player State:")
+    print(json.dumps(engine.player_state, indent=2, ensure_ascii=False))
+    
+    if engine.current_location:
+        location = engine.db.get_entity(engine.current_location)
+        if location:
+            print("\nLocation State:")
+            current_state = engine.db.get_current_world_state(engine.current_location)
+            if current_state:
+                print(json.dumps(json.loads(current_state.state_data), indent=2, ensure_ascii=False))
+    
+    print("\nPress Enter to continue...")
+    input()
+
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Interactive Text Adventure Game')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+    args = parser.parse_args()
+    
     # Load environment variables
     load_dotenv()
     
@@ -40,10 +70,12 @@ def main():
     engine = GameEngine()
     
     # Print welcome message
-    print_welcome()
+    # print_welcome()
     
     # Main game loop
-    while True:        
+    while True:
+        # clear_screen()
+        
         # Show current location description
         print(engine.get_current_location_description())
         print("\nWhat would you like to do?")
@@ -78,8 +110,13 @@ def main():
         # Process the command
         response = engine.process_command(command)
         
+        # Log state in debug mode
+        log_state(engine, command, response, args.debug)
+        
         # Show the response
         print(f"\n{response}")
+        if not args.debug:
+            input("\nPress Enter to continue...")
 
 if __name__ == "__main__":
     main() 

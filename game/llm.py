@@ -1,4 +1,4 @@
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 from typing import Dict, Any
@@ -40,6 +40,8 @@ class GameLLM:
             }}
 
             Do not include any other text in your response.
+
+            It is imperative that you output the reponse in Chinese.
             """
         )
         
@@ -85,6 +87,8 @@ class GameLLM:
             {entity}
             
             The description should be detailed and immersive, suitable for a text adventure game.
+
+            It is imperative that you output the reponse in Chinese.
             """
         )
         
