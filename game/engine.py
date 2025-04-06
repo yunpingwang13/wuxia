@@ -30,7 +30,7 @@ class GameEngine:
             "relationships": {}
         }
     
-    def process_command(self, player_input: str) -> str:
+    def process_command(self, player_input: str, debug: bool = False) -> str:
         """Process a player command and return the game's response."""
         # Get relevant context from RAG system
         context = self.rag.get_relevant_context(
@@ -46,29 +46,52 @@ class GameEngine:
         }
         
         # Process command with LLM
-        result = self.llm.process_command(player_input, context, world_state)
-        
+        result = self.llm.process_command(player_input, context, world_state, debug)
+
         # Record the action
         self.db.record_action(
             player_input=player_input,
             action_type=result["action"],
-            result=result["player_response"],
+            result=result["description"],
             world_state_snapshot=json.dumps(world_state)
         )
         
-        # Update world state based on changes
-        if result["world_state_changes"]:
-            for entity_id, changes in result["world_state_changes"].items():
-                current_state = self.db.get_current_world_state(entity_id)
-                new_state = json.loads(current_state.state_data) if current_state else {}
-                new_state.update(new_state)
-                if entity_id == "current_location":
-                    self.current_location = changes
-                self.rag.update_world_state(entity_id, new_state)
+        if result["success"]:
+            # Update location if specified
+            if "new_state" in result and "location" in result["new_state"]:
+                new_location_id = result["new_state"]["location"]
+                if new_location_id:
+                    current_state = self.db.get_current_world_state(new_location_id)
+                    new_state = json.loads(current_state.state_data) if current_state else {}
+                    new_state.update(new_state)
+                    self.current_location = new_location_id
+                    self.rag.update_world_state(new_location_id, new_state)
+            
+            # Update inventory if specified
+            if "new_state" in result and "inventory" in result["new_state"]:
+                self.player_state["inventory"] = result["new_state"]["inventory"]
+            
+            # Update discovered items/locations if specified
+            if "new_state" in result and "discovered" in result["new_state"]:
+                for item in result["new_state"]["discovered"]:
+                    if item not in self.player_state["discovered"]:
+                        self.player_state["discovered"].append(item)
+            
+            # Update RAG system with new information
+            if result["description"]:
+                self.rag.add_knowledge(
+                    text=result["description"],
+                    metadata={
+                        "type": "action_result",
+                        "action": result["action"],
+                        "target": result.get("target", ""),
+                        "timestamp": str(datetime.utcnow())
+                    }
+                )
         
-        return result["player_response"]
+        return result["description"]
     
-    def get_current_location_description(self) -> str:
+    def get_current_location_description(self, debug: bool = False) -> str:
         """Get a description of the current location."""
         if not self.current_location:
             return "You are nowhere."
@@ -88,7 +111,7 @@ class GameEngine:
             "current_state": state_data
         }
         
-        return self.llm.generate_description(location_data)
+        return self.llm.generate_description(location_data, debug)
     
     def save_game(self, save_name: str):
         """Save the current game state."""

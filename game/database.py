@@ -43,9 +43,10 @@ class Database:
     def get_session(self):
         return self.Session()
     
-    def add_entity(self, name, description, entity_type, properties=None):
+    def add_entity(self, id, name, description, entity_type, properties=None):
         session = self.get_session()
         entity = WorldEntity(
+            id=id,
             name=name,
             description=description,
             entity_type=entity_type,

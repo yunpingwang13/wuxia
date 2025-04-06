@@ -73,7 +73,8 @@ class RAGSystem:
                 location_context = {
                     "name": location_entity.name,
                     "description": location_entity.description,
-                    "current_state": location_state.state_data if location_state else None
+                    "current_state": location_state.state_data if location_state else None,
+                    "properties": location_entity.properties
                 }
         
         return {

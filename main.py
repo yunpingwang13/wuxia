@@ -77,7 +77,7 @@ def main():
         # clear_screen()
         
         # Show current location description
-        print(engine.get_current_location_description())
+        print(engine.get_current_location_description(args.debug))
         print("\nWhat would you like to do?")
         
         # Get player input
@@ -91,7 +91,6 @@ def main():
             save_name = input("Enter a name for this save: ").strip()
             save_id = engine.save_game(save_name)
             print(f"\nGame saved successfully! (Save ID: {save_id})")
-            input("\nPress Enter to continue...")
             continue
         elif command == 'load':
             try:
@@ -100,23 +99,19 @@ def main():
                     print("\nGame loaded successfully!")
                 else:
                     print("\nError: Invalid save ID or save file corrupted.")
-                input("\nPress Enter to continue...")
                 continue
             except ValueError:
                 print("\nError: Please enter a valid save ID (number).")
-                input("\nPress Enter to continue...")
                 continue
         
         # Process the command
-        response = engine.process_command(command)
+        response = engine.process_command(command, args.debug)
         
         # Log state in debug mode
         log_state(engine, command, response, args.debug)
         
         # Show the response
         print(f"\n{response}")
-        if not args.debug:
-            input("\nPress Enter to continue...")
 
 if __name__ == "__main__":
     main() 
