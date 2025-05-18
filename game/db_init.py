@@ -3,12 +3,23 @@ import json
 from datetime import datetime
 from .database import Database, WorldEntity
 import os
+import logging
+from .llm import GameLLM
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 class DatabaseInitializer:
     def __init__(self, db: Database):
+        logger.debug("Initializing DatabaseInitializer")
         self.db = db
         self.config = self._load_config()
         self._validate_location_relationships()
+        self.llm = GameLLM()
     
     def _validate_location_relationships(self):
         """Validate that all location relationships are bidirectional."""
@@ -55,33 +66,108 @@ class DatabaseInitializer:
         with open(config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     
-    def initialize_world(self):
-        """Initialize the game world with all entities and background knowledge."""
-        # Check for existing locations
-        existing_locations = self._get_existing_locations()
+    def initialize_world(self) -> int:
+        """Initialize the game world with starting locations and entities."""
+        logger.debug("Starting world initialization")
         
-        if existing_locations:
-            print("Found existing locations in database. Using existing world state.")
-            return existing_locations["隐剑山庄山门"].id
+        try:
+            # Check if starting location exists
+            session = self.db.get_session()
+            starting_location = session.query(WorldEntity).filter_by(
+                name="青云山",
+                entity_type="location"
+            ).first()
+            
+            if starting_location:
+                logger.debug("Found existing starting location: %s", starting_location.name)
+                return starting_location.id
+            
+            # Create starting location if it doesn't exist
+            logger.debug("Creating new starting location")
+            location_data = {
+                "name": "青云山",
+                "description": "一座云雾缭绕的仙山，山间有清泉流淌，灵气充沛。",
+                "entity_type": "location",
+                "properties": json.dumps({
+                    "exits": {},
+                    "items": ["清泉", "灵草"],
+                    "description": "一座云雾缭绕的仙山，山间有清泉流淌，灵气充沛。"
+                })
+            }
+            
+            starting_location = self.db.add_entity(**location_data)
+            logger.debug("Created starting location with ID: %d", starting_location.id)
+            
+            return starting_location.id
+            
+        except Exception as e:
+            logger.error("Error initializing world: %s", str(e))
+            raise
+        finally:
+            session.close()
+    
+    def create_location(self, name: str, description: str, properties: Dict[str, Any]) -> WorldEntity:
+        """Create a new location in the game world."""
+        logger.debug("Creating new location: %s", name)
         
-        print("No existing locations found. Creating new world...")
+        try:
+            location_data = {
+                "name": name,
+                "description": description,
+                "entity_type": "location",
+                "properties": json.dumps(properties)
+            }
+            
+            location = self.db.add_entity(**location_data)
+            logger.debug("Created location with ID: %d", location.id)
+            
+            return location
+            
+        except Exception as e:
+            logger.error("Error creating location: %s", str(e))
+            raise
+    
+    def create_item(self, name: str, description: str, properties: Dict[str, Any]) -> WorldEntity:
+        """Create a new item in the game world."""
+        logger.debug("Creating new item: %s", name)
         
-        # Create locations
-        locations = self._create_locations()
+        try:
+            item_data = {
+                "name": name,
+                "description": description,
+                "entity_type": "item",
+                "properties": json.dumps(properties)
+            }
+            
+            item = self.db.add_entity(**item_data)
+            logger.debug("Created item with ID: %d", item.id)
+            
+            return item
+            
+        except Exception as e:
+            logger.error("Error creating item: %s", str(e))
+            raise
+    
+    def create_character(self, name: str, description: str, properties: Dict[str, Any]) -> WorldEntity:
+        """Create a new character in the game world."""
+        logger.debug("Creating new character: %s", name)
         
-        # Create items
-        items = self._create_items(locations)
-        
-        # Create characters
-        characters = self._create_characters(locations)
-        
-        # Set initial world states
-        self._set_initial_states(locations)
-        
-        # Add world knowledge
-        self._add_world_knowledge()
-        
-        return locations["starting_room"].id
+        try:
+            character_data = {
+                "name": name,
+                "description": description,
+                "entity_type": "character",
+                "properties": json.dumps(properties)
+            }
+            
+            character = self.db.add_entity(**character_data)
+            logger.debug("Created character with ID: %d", character.id)
+            
+            return character
+            
+        except Exception as e:
+            logger.error("Error creating character: %s", str(e))
+            raise
     
     def _get_existing_locations(self) -> Dict[str, Any]:
         """Get existing locations from the database."""
