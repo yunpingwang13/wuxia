@@ -135,7 +135,7 @@ def main():
         log_state(engine, command, response, args.debug)
         
         # Show the response
-        print(f"\n{response}")
+        print(f"\n{response['description']}")
 
 if __name__ == "__main__":
     main() 

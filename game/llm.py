@@ -143,6 +143,8 @@ class GameLLM:
         description_prompt = ChatPromptTemplate.from_messages([
             ("system", """Generate a vivid, engaging description of the following game entity or situation.
             The description should be detailed and immersive, suitable for a text adventure game.
+             
+             The description should include all interactable items, characters, and ways to connect to other locations in the game.
             
             It is imperative that you output the response in Chinese."""),
             ("human", "{entity}")

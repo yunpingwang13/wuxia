@@ -18,93 +18,13 @@ class DatabaseInitializer:
         logger.debug("Initializing DatabaseInitializer")
         self.db = db
         self.config = self._load_config()
-        self._validate_location_relationships()
         self.llm = GameLLM()
-    
-    def _validate_location_relationships(self):
-        """Validate that all location relationships are bidirectional."""
-        # Track all relationships to check for consistency
-        relationships: Dict[int, Dict[str, int]] = {}
-        
-        # First pass: collect all relationships
-        for loc_config in self.config["locations"].values():
-            loc_id = loc_config["id"]
-            relationships[loc_id] = {}
-            for direction, target_id in loc_config["exits"].items():
-                relationships[loc_id][direction] = target_id
-        
-        # Second pass: validate bidirectional relationships
-        for loc_id, exits in relationships.items():
-            for direction, target_id in exits.items():
-                # Get the opposite direction
-                opposite_dir = self._get_opposite_direction(direction)
-                
-                # Check if the target location has a corresponding exit back
-                if target_id in relationships:
-                    target_exits = relationships[target_id]
-                    if opposite_dir not in target_exits or target_exits[opposite_dir] != loc_id:
-                        raise ValueError(
-                            f"Inconsistent relationship: Location {loc_id} has exit {direction} to {target_id}, "
-                            f"but {target_id} doesn't have {opposite_dir} back to {loc_id}"
-                        )
-    
-    def _get_opposite_direction(self, direction: str) -> str:
-        """Get the opposite direction for a given direction."""
-        opposites = {
-            "north": "south",
-            "south": "north",
-            "east": "west",
-            "west": "east",
-            "up": "down",
-            "down": "up"
-        }
-        return opposites.get(direction, direction)
     
     def _load_config(self) -> Dict[str, Any]:
         """Load world configuration from JSON file."""
         config_path = os.path.join(os.path.dirname(__file__), 'config', 'world_config.json')
         with open(config_path, 'r', encoding='utf-8') as f:
             return json.load(f)
-    
-    def initialize_world(self) -> int:
-        """Initialize the game world with starting locations and entities."""
-        logger.debug("Starting world initialization")
-        
-        try:
-            # Check if starting location exists
-            session = self.db.get_session()
-            starting_location = session.query(WorldEntity).filter_by(
-                name="青云山",
-                entity_type="location"
-            ).first()
-            
-            if starting_location:
-                logger.debug("Found existing starting location: %s", starting_location.name)
-                return starting_location.id
-            
-            # Create starting location if it doesn't exist
-            logger.debug("Creating new starting location")
-            location_data = {
-                "name": "青云山",
-                "description": "一座云雾缭绕的仙山，山间有清泉流淌，灵气充沛。",
-                "entity_type": "location",
-                "properties": json.dumps({
-                    "exits": {},
-                    "items": ["清泉", "灵草"],
-                    "description": "一座云雾缭绕的仙山，山间有清泉流淌，灵气充沛。"
-                })
-            }
-            
-            starting_location = self.db.add_entity(**location_data)
-            logger.debug("Created starting location with ID: %d", starting_location.id)
-            
-            return starting_location.id
-            
-        except Exception as e:
-            logger.error("Error initializing world: %s", str(e))
-            raise
-        finally:
-            session.close()
     
     def create_location(self, name: str, description: str, properties: Dict[str, Any]) -> WorldEntity:
         """Create a new location in the game world."""
@@ -305,4 +225,104 @@ class DatabaseInitializer:
                 session.add(target_loc)
         
         session.commit()
-        return new_location 
+        return new_location
+    
+    def initialize_world(self):
+        """Initialize the game world using the configuration file."""
+        logger.info("Initializing game world from configuration")
+        
+        try:
+            # Create locations
+            locations = {}
+            for key, config in self.config["locations"].items():
+                locations[key] = self.db.add_entity(
+                    id=config["id"],
+                    name=config["name"],
+                    description=config["description"],
+                    entity_type="location",
+                    properties=json.dumps(config["properties"])
+                )
+                logger.debug("Created location: %s (ID: %d)", config["name"], config["id"])
+            
+            # Create items
+            items = {}
+            for key, config in self.config["items"].items():
+                items[key] = self.db.add_entity(
+                    id=config["id"],
+                    name=key,
+                    description=config["description"],
+                    entity_type="item",
+                    properties=json.dumps({
+                        "location": config["location_id"],
+                        "properties": config["properties"],
+                        "state": config["state"]
+                    })
+                )
+                logger.debug("Created item: %s (ID: %d)", key, config["id"])
+            
+            # Create characters
+            characters = {}
+            for key, config in self.config["characters"].items():
+                characters[key] = self.db.add_entity(
+                    id=config["id"],
+                    name=key,
+                    description=config["description"],
+                    entity_type="character",
+                    properties=json.dumps({
+                        "location": config["location_id"],
+                        "properties": config["properties"],
+                        "state": config["state"]
+                    })
+                )
+                logger.debug("Created character: %s (ID: %d)", key, config["id"])
+            
+            # Add world knowledge
+            for knowledge in self.config["world_knowledge"]:
+                metadata = {"type": knowledge["type"]}
+                if "character_id" in knowledge:
+                    metadata["character_id"] = knowledge["character_id"]
+                if "item_id" in knowledge:
+                    metadata["item_id"] = knowledge["item_id"]
+                if "location_id" in knowledge:
+                    metadata["location_id"] = knowledge["location_id"]
+                
+                self.db.add_entity(
+                    id=knowledge["id"],
+                    name=f"Knowledge_{knowledge['type']}",
+                    description=knowledge["text"],
+                    entity_type="knowledge",
+                    properties=json.dumps(metadata)
+                )
+                logger.debug("Added world knowledge: %s (ID: %d)", knowledge["type"], knowledge["id"])
+            
+            # Initialize world states for locations
+            for location in locations.values():
+                self.db.add_world_state(
+                    entity_id=location.id,
+                    state_data=json.dumps({
+                        "visited": False,
+                        "visit_count": 0,
+                        "last_visited": None,
+                        "discovered_items": [],
+                        "environmental_changes": {},
+                        "interactions": {}
+                    })
+                )
+                logger.debug("Initialized world state for location: %s (ID: %d)", location.name, location.id)
+            
+            logger.info("World initialization completed successfully")
+            return {
+                "locations": locations,
+                "items": items,
+                "characters": characters
+            }
+            
+        except Exception as e:
+            logger.error("Error initializing world: %s", str(e))
+            raise
+
+def initialize_world():
+    """Initialize the game world using the configuration file."""
+    db = Database()
+    initializer = DatabaseInitializer(db)
+    return initializer.initialize_world() 
